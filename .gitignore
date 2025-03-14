@@ -1,6 +1,11 @@
 venv/
-venv/
 __pycache__/
 *.pyc
 mlruns/
 mlflow.db
+include/
+Data/Processed_Loan_Data.csv
+Models/best_model.pkl
+task-definition.json
+*.log
+.env
