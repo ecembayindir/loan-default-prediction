@@ -1,0 +1,11 @@
+flask
+pandas
+numpy
+scikit-learn
+mlflow
+arize
+python-dotenv
+gunicorn
+plotly
+seaborn
+imblearn
