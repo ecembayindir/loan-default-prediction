@@ -33,16 +33,11 @@ jobs:
 
       - name: Format
         run: |
-          python -m black app.py
+          black app.py
 
       - name: Lint
         run: |
-          python -m pylint --disable=R,C app.py
-
-      # Test step is removed or commented out
-      # - name: Test
-      #   run: |
-      #     python -m pytest -vv test.py
+          pylint --disable=R,C app.py
 
   cd_pipeline:
     runs-on: ubuntu-latest

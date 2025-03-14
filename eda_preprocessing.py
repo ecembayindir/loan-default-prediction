@@ -1,73 +1,74 @@
-# eda_preprocessing.py
+# model_training.py
+import mlflow
 import numpy as np
 import pandas as pd
-import plotly.express as px
-import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
-from imblearn.over_sampling import SMOTE
+import pickle
 import os
 
 # File paths
-data_path = "Data/Loan_Data.csv"
-output_path = "Data/Processed_Loan_Data.csv"
-stats_path = "Data/Loan_Data_Describe.csv"
+data_path = "Data/Processed_Loan_Data.csv"
+model_path = "Models/best_model.pkl"
+random_seed = 42
+mlflow.set_tracking_uri("http://localhost:8080")
 
 # Load data
 df = pd.read_csv(data_path)
-print("Dataset Shape:", df.shape)
-print("\nData Types:\n", df.dtypes)
-print("\nMissing Values:\n", df.isna().sum())
-
-# Basic statistics
-print("\nDescriptive Statistics:\n", df.describe())
-df.describe().to_csv(stats_path)
-
-# Visualizations (save as PNG instead of displaying)
-# Default Distribution
-fig = px.histogram(df, x="default", title="Default Distribution", color="default")
-fig.write_image("Data/default_distribution.png")
-print("Default distribution plot saved to Data/default_distribution.png")
-
-# Box plots
-for col in ["income", "fico_score", "years_employed", "loan_amt_outstanding"]:
-    fig = px.box(df, x=col, color="default", title=f"{col} by Default")
-    fig.write_image(f"Data/{col}_by_default.png")
-    print(f"{col} by default plot saved to Data/{col}_by_default.png")
-
-# Correlation Matrix
-corr_matrix = df.corr().round(2)
-fig = px.imshow(corr_matrix, text_auto=True, color_continuous_scale='Blues', title="Correlation Matrix")
-fig.write_image("Data/correlation_matrix.png")
-print("Correlation matrix plot saved to Data/correlation_matrix.png")
-
-# Feature importance (using matplotlib, which is more reliable for static saving)
-from sklearn.ensemble import RandomForestClassifier
-X = df.drop(columns=["default", "customer_id"])
+X = df.drop("default", axis=1)
 y = df["default"]
-rf = RandomForestClassifier(random_state=42)
-rf.fit(X, y)
-feat_importance = pd.Series(rf.feature_importances_, index=X.columns).sort_values(ascending=False)
-print("\nFeature Importance:\n", feat_importance)
-plt.figure(figsize=(10, 6))
-sns.barplot(x=feat_importance.values, y=feat_importance.index)
-plt.title("Feature Importance")
-plt.savefig("Data/feature_importance.png")
-plt.close()  # Close the plot to free memory
-print("Feature importance plot saved to Data/feature_importance.png")
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed)
 
-# Preprocessing
-df.drop(columns=["customer_id"], inplace=True)
-df["default"] = df["default"].astype(bool)
-num_cols = ["loan_amt_outstanding", "total_debt_outstanding", "income", "fico_score", "years_employed"]
-df[num_cols] = (df[num_cols] - df[num_cols].mean()) / df[num_cols].std()
-X = df.drop(columns=["default"])
-y = df["default"]
-smote = SMOTE(random_state=42)
-X_balanced, y_balanced = smote.fit_resample(X, y)
-df_balanced = pd.concat([pd.DataFrame(X_balanced, columns=X.columns), pd.Series(y_balanced, name="default")], axis=1)
-df_balanced.to_csv(output_path, index=False)
-print(f"Processed data saved to {output_path}")
+# Logging function
+def log_model(model, X_test, y_test, y_pred, params, run_name, experiment_name):
+    with mlflow.start_run(run_name=run_name, experiment_id=mlflow.set_experiment(experiment_name).experiment_id):
+        class_report = classification_report(y_test, y_pred, output_dict=True)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+        metrics = {
+            "precision": class_report["1"]["precision"],
+            "recall": class_report["1"]["recall"],
+            "f1_score": class_report["1"]["f1-score"],
+            "false_positives": int(conf_matrix[0, 1]),
+            "false_negatives": int(conf_matrix[1, 0]),
+        }
+        fig, ax = plt.subplots()
+        ConfusionMatrixDisplay(conf_matrix, display_labels=["No Default", "Default"]).plot(ax=ax)
+        plt.title(f"Confusion Matrix - {run_name}")
+
+        mlflow.log_params(params)
+        mlflow.log_metrics(metrics)
+        mlflow.log_figure(fig, "confusion_matrix.png")
+        mlflow.sklearn.log_model(model, run_name)
+    return metrics
+
+# Logistic Regression
+mlflow.set_experiment("Logistic_Regression")
+params_lr = {"class_weight": "balanced", "solver": "saga", "penalty": "elasticnet", "l1_ratio": 0.5, "max_iter": 1000,
+             "random_state": random_seed}
+lr = LogisticRegression(**params_lr)
+lr.fit(X_train, y_train)
+y_pred_lr = lr.predict(X_test)
+metrics_lr = log_model(lr, X_test, y_test, y_pred_lr, params_lr, "lr_balanced_saga", "Logistic_Regression")
+print("Logistic Regression Metrics:", metrics_lr)
+
+# Random Forest
+mlflow.set_experiment("Random_Forest")
+params_rf = {"n_estimators": 100, "max_depth": 10, "min_samples_split": 5, "random_state": random_seed}
+rf = RandomForestClassifier(**params_rf)
+rf.fit(X_train, y_train)
+y_pred_rf = rf.predict(X_test)
+metrics_rf = log_model(rf, X_test, y_test, y_pred_rf, params_rf, "rf_depth10_est100", "Random_Forest")
+print("Random Forest Metrics:", metrics_rf)
+
+# Save best model
+best_model = rf if metrics_rf["f1_score"] > metrics_lr["f1_score"] else lr
+with open(model_path, "wb") as f:
+    pickle.dump(best_model, f)
+print(f"Best model saved to {model_path}")
 
 # Git commit
-os.system('git add . && git commit -m "EDA and preprocessing completed with static plots"')
+os.system('git add . && git commit -m "Model training and MLflow tracking completed"')
 os.system('git push origin main')
