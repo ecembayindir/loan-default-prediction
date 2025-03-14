@@ -1,10 +1,226 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loan Default Prediction</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            background-color: #f8f9fa;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        .result-card {
+            display: none;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .high-risk {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .low-risk {
+            color: #28a745;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-$END$
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="mb-0">Loan Default Prediction API</h2>
+                    </div>
+                    <div class="card-body">
+                        <p class="lead">Enter customer financial information to predict loan default probability.</p>
+
+                        <form id="prediction-form">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="credit_lines" class="form-label">Credit Lines Outstanding</label>
+                                    <input type="number" class="form-control" id="credit_lines" value="3" min="0" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="loan_amt" class="form-label">Loan Amount Outstanding ($)</label>
+                                    <input type="number" class="form-control" id="loan_amt" value="5000" min="0" step="0.01" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="total_debt" class="form-label">Total Debt Outstanding ($)</label>
+                                    <input type="number" class="form-control" id="total_debt" value="3500" min="0" step="0.01" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="income" class="form-label">Annual Income ($)</label>
+                                    <input type="number" class="form-control" id="income" value="75000" min="0" step="0.01" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="years_employed" class="form-label">Years Employed</label>
+                                    <input type="number" class="form-control" id="years_employed" value="5" min="0" step="0.1" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="fico_score" class="form-label">FICO Score</label>
+                                    <input type="number" class="form-control" id="fico_score" value="650" min="300" max="850" required>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <button type="submit" class="btn btn-primary">Predict Default Risk</button>
+                            </div>
+                        </form>
+
+                        <div class="loader" id="loader"></div>
+
+                        <div class="result-card card mt-4" id="result-card">
+                            <div class="card-header">
+                                <h4>Prediction Results</h4>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>Default Probability: <span id="probability"></span></h5>
+                                        <h5>Risk Assessment: <span id="risk-level"></span></h5>
+                                        <div class="mt-3">
+                                            <h6>Recommendation:</h6>
+                                            <p id="recommendation"></p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="progress" style="height: 30px;">
+                                            <div class="progress-bar" id="risk-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <div class="mt-2 text-center">
+                                            <small>0% = Low Risk, 100% = High Risk</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h4 class="mb-0">About This Model</h4>
+                    </div>
+                    <div class="card-body">
+                        <p>This prediction model uses machine learning to estimate the probability of loan default based on customer financial information.</p>
+                        <h5>Key Features:</h5>
+                        <ul>
+                            <li><strong>Credit Lines Outstanding:</strong> Number of credit accounts the customer has</li>
+                            <li><strong>Loan Amount Outstanding:</strong> Current loan balance</li>
+                            <li><strong>Total Debt Outstanding:</strong> Sum of all debts the customer owes</li>
+                            <li><strong>Income:</strong> Annual income</li>
+                            <li><strong>Years Employed:</strong> Duration of current employment</li>
+                            <li><strong>FICO Score:</strong> Credit score (300-850)</li>
+                        </ul>
+                        <p>The model analyzes patterns from historical loan data to identify risk factors associated with default. A higher probability indicates a higher likelihood of default based on similar customer profiles.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('prediction-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Show loader
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('result-card').style.display = 'none';
+
+            // Get form values
+            const data = {
+                credit_lines_outstanding: parseInt(document.getElementById('credit_lines').value),
+                loan_amt_outstanding: parseFloat(document.getElementById('loan_amt').value),
+                total_debt_outstanding: parseFloat(document.getElementById('total_debt').value),
+                income: parseFloat(document.getElementById('income').value),
+                years_employed: parseFloat(document.getElementById('years_employed').value),
+                fico_score: parseInt(document.getElementById('fico_score').value)
+            };
+
+            // Make API call
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                // Hide loader
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('result-card').style.display = 'block';
+
+                // Display results
+                const probability = result.probability * 100;
+                document.getElementById('probability').textContent = probability.toFixed(1) + '%';
+
+                // Set risk level and recommendation
+                let riskLevel, recommendation, colorClass;
+                if (probability <= 25) {
+                    riskLevel = "Low Risk";
+                    recommendation = "Approve loan with standard terms.";
+                    colorClass = "low-risk";
+                } else if (probability <= 50) {
+                    riskLevel = "Moderate Risk";
+                    recommendation = "Consider approval with adjusted terms (higher interest or lower amount).";
+                    colorClass = "low-risk";
+                } else if (probability <= 75) {
+                    riskLevel = "High Risk";
+                    recommendation = "Proceed with caution. Additional guarantees may be required.";
+                    colorClass = "high-risk";
+                } else {
+                    riskLevel = "Very High Risk";
+                    recommendation = "Loan application should likely be declined.";
+                    colorClass = "high-risk";
+                }
+
+                // Update risk level
+                const riskLevelElement = document.getElementById('risk-level');
+                riskLevelElement.textContent = riskLevel;
+                riskLevelElement.className = colorClass;
+
+                // Update recommendation
+                document.getElementById('recommendation').textContent = recommendation;
+
+                // Update progress bar
+                const riskBar = document.getElementById('risk-bar');
+                riskBar.style.width = probability + '%';
+                if (probability <= 25) {
+                    riskBar.className = 'progress-bar bg-success';
+                } else if (probability <= 50) {
+                    riskBar.className = 'progress-bar bg-warning';
+                } else if (probability <= 75) {
+                    riskBar.className = 'progress-bar bg-danger';
+                } else {
+                    riskBar.className = 'progress-bar bg-dark';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('loader').style.display = 'none';
+                alert('An error occurred while making the prediction. Please try again.');
+            });
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

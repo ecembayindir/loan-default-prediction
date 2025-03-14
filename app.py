@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import pandas as pd
 import pickle
 import mlflow
@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Loan Default Prediction API"
+    return render_template('index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -68,8 +68,4 @@ def predict():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
-    app.run(host="0.0.0.0", port=port)
-
-# Git commit
-os.system('git add . && git commit -m "Updated Flask app with MLflow monitoring"')
-os.system('git push origin main')
+    app.run(host="0.0.0.0", port=port, debug=True)
