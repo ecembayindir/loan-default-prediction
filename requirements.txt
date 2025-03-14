@@ -1,6 +1,5 @@
 flask
 pandas
-catboost
 numpy
 scikit-learn
 mlflow

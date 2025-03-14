@@ -4,8 +4,6 @@ __pycache__/
 mlruns/
 mlflow.db
 include/
+Data/Loan_Data.csv
 Data/Processed_Loan_Data.csv
-Models/best_model.pkl
-task-definition.json
 *.log
-.env

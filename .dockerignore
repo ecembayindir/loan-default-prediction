@@ -1,13 +1,10 @@
-test.py
-README.md
 .git*
 /venv
 __pycache__/
 *.pyc
 mlruns/
 mlflow.db
-Data/Processed_Loan_Data.csv
 include
-task-definition.json
 *.log
-.env
+Data/default_distribution.png
+Data/correlation_matrix.png
