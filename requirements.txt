@@ -10,4 +10,6 @@ plotly
 seaborn
 imblearn
 black
+pylint
+pytest
 
