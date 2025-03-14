@@ -25,9 +25,9 @@ try:
     model = pickle.load(open(model_path, "rb"))
     stats = pd.read_csv(stats_path).loc[[1, 2]].reset_index(drop=True)
 except FileNotFoundError as e:
-    raise FileNotFoundError(f"Required files not found: {e}")
-except Exception as e:
-    raise Exception(f"Error loading model or stats: {e}")
+    raise FileNotFoundError(f"Required files not found: {e}") from e
+except (pickle.PickleError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+    raise RuntimeError(f"Error loading model or stats: {e}") from e
 
 app = Flask(__name__)
 
@@ -81,7 +81,11 @@ def predict():
             })
     except (ValueError, KeyError) as e:
         return jsonify({"error": f"Invalid input data: {e}"}), 400
-    except Exception as e:
+    except (AttributeError, IndexError) as e:
+        # More specific exceptions for data processing errors
+        return jsonify({"error": f"Data processing error: {e}"}), 500
+    except RuntimeError as e:
+        # More specific than general Exception
         return jsonify({"error": f"Prediction error: {e}"}), 500
 
 if __name__ == "__main__":
