@@ -4,24 +4,30 @@ import pandas as pd
 import pickle
 import mlflow
 import os
+from contextlib import nullcontext
 
 # Set MLflow tracking URI (disable in production if no server is available)
 try:
     mlflow.set_tracking_uri("http://localhost:8080")  # Update to remote URI in production
-except Exception:
-    print("MLflow tracking URI not available. Running without MLflow logging.")
+except (ConnectionError, mlflow.exceptions.MlflowException) as e:
+    print(f"MLflow tracking URI not available: {e}. Running without MLflow logging.")
 
 # Start an MLflow experiment for production monitoring (optional)
 try:
     mlflow.set_experiment("Production_Monitoring")
-except Exception:
+except (ConnectionError, mlflow.exceptions.MlflowException) as e:
     pass
 
 # Load model and stats
-model_path = "Models/best_model.pkl"
-stats_path = "Data/Loan_Data_Describe.csv"
-model = pickle.load(open(model_path, "rb"))
-stats = pd.read_csv(stats_path).loc[[1, 2]].reset_index(drop=True)
+try:
+    model_path = "Models/best_model.pkl"
+    stats_path = "Data/Loan_Data_Describe.csv"
+    model = pickle.load(open(model_path, "rb"))
+    stats = pd.read_csv(stats_path).loc[[1, 2]].reset_index(drop=True)
+except FileNotFoundError as e:
+    raise FileNotFoundError(f"Required files not found: {e}")
+except Exception as e:
+    raise Exception(f"Error loading model or stats: {e}")
 
 app = Flask(__name__)
 
@@ -73,9 +79,22 @@ def predict():
                 "probability": prob,
                 "message": "High risk of default!" if prob > 0.5 else "Low risk. Loan can be granted."
             })
+    except (ValueError, KeyError) as e:
+        return jsonify({"error": f"Invalid input data: {e}"}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Prediction error: {e}"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
+    import socket
+    while True:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("0.0.0.0", port))
+            sock.close()
+            break
+        except OSError:
+            print(f"Port {port} is in use, trying {port + 1}")
+            port += 1
     app.run(host="0.0.0.0", port=port, debug=True)
+    print(f"Running on port {port}")
