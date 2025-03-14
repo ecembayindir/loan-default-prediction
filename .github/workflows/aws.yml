@@ -5,7 +5,7 @@ on:
     branches: ["main"]
 
 env:
-  AWS_REGION: us-west-3                  # Adjust to your preferred AWS region
+  AWS_REGION: eu-west-3                  # Adjust to your preferred AWS region
   ECR_REPOSITORY: loan-default-prediction # Your Amazon ECR repository name
   ECS_SERVICE: loanDefaultService         # Your Amazon ECS service name
   ECS_CLUSTER: loanDefaultCluster         # Your Amazon ECS cluster name
