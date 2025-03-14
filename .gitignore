@@ -1,1 +1,8 @@
 venv/
+venv/
+__pycache__/
+*.pyc
+mlruns/
+mlflow.db
+Data/*.csv # Optional, if you store large datasets externally
+Models/*.pkl # Optional, if you store models externally
