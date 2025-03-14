@@ -9,4 +9,5 @@ gunicorn
 plotly
 seaborn
 imblearn
+black
 
