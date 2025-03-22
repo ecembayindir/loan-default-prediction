@@ -4,7 +4,7 @@ import pandas as pd
 import pickle
 import mlflow
 import os
-from contextlib import nullcontext
+# Removed unused import: from contextlib import nullcontext
 
 # Set MLflow tracking URI from environment variable
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:8080")
@@ -13,14 +13,14 @@ try:
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment("Production_Monitoring")
     print(f"MLflow tracking URI set to: {MLFLOW_TRACKING_URI}")
-except Exception as e:
+except (mlflow.exceptions.MlflowException, ConnectionError) as e:  # More specific exceptions
     mlflow_enabled = False
     print(f"Failed to set MLflow tracking URI: {e}. Running without MLflow logging.")
 
 # Start an MLflow experiment
 try:
     mlflow.set_experiment("Production_Monitoring")
-except Exception as e:
+except (mlflow.exceptions.MlflowException, ConnectionError) as e:  # More specific exceptions
     print(f"Failed to set MLflow experiment: {e}")
 
 # Load model and stats
@@ -76,7 +76,7 @@ def predict():
                 mlflow.log_param("fico_score", fico_score)
                 mlflow.log_metric("prediction_probability", prob)
                 mlflow.log_metric("prediction_label", prediction)
-        except Exception as e:
+        except (mlflow.exceptions.MlflowException, ConnectionError, RuntimeError) as e:  # More specific exceptions
             print(f"MLflow logging failed: {e}")
 
         # Return response
