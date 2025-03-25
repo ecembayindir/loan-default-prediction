@@ -5,12 +5,11 @@ on:
     branches: ["main"]
 
 env:
-  AWS_REGION: eu-west-3                  # Adjust to your preferred AWS region
-  ECR_REPOSITORY: loan-default-prediction # Your Amazon ECR repository name
-  ECS_SERVICE: loanDefaultService         # Your Amazon ECS service name
-  ECS_CLUSTER: loanDefaultCluster         # Your Amazon ECS cluster name
-  ECS_TASK_DEFINITION: loanDefaultTask    # Your Amazon ECS task definition name
-  CONTAINER_NAME: loanDefaultContainer    # The name of the container in your task definition
+  AWS_REGION: eu-west-3
+  ECR_REPOSITORY: loan-default-prediction
+  ECS_SERVICE: loanDefaultService
+  ECS_CLUSTER: loanDefaultCluster
+  CONTAINER_NAME: loanDefaultContainer
 
 permissions:
   contents: read
@@ -46,11 +45,18 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      - name: Download Current Task Definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_SERVICE }} \
+            --query taskDefinition \
+            > task-definition.json
+
       - name: Update ECS Task Definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          task-definition: task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
