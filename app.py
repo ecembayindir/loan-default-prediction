@@ -26,9 +26,9 @@ def find_model_file():
     ]
 
     for path in possible_paths:
-        logger.info(f"Checking model path: {path}")
+        logger.info("Checking model path: %s", path)
         if os.path.exists(path):
-            logger.info(f"Model found at: {path}")
+            logger.info("Model found at: %s", path)
             return path
 
     logger.error("No model file found in any expected location")
@@ -51,7 +51,7 @@ try:
         logger.error("Could not locate model file")
 
 except Exception as e:
-    logger.error(f"Model Loading Error: {e}")
+    logger.error("Model Loading Error: %s", e)
     logger.error(traceback.format_exc())
 
 
@@ -93,7 +93,7 @@ def predict():
         # Validate input data
         for feature in feature_order:
             if feature not in data:
-                logger.error(f"Missing feature: {feature}")
+                logger.error("Missing feature: %s", feature)
                 return jsonify({
                     "error": f"Missing required feature: {feature}"
                 }), 400
@@ -102,7 +102,7 @@ def predict():
         try:
             features = [float(data.get(feature, 0)) for feature in feature_order]
         except ValueError as ve:
-            logger.error(f"Feature conversion error: {ve}")
+            logger.error("Feature conversion error: %s", ve)
             return jsonify({
                 "error": "Invalid feature values. All features must be numeric."
             }), 400
@@ -119,7 +119,7 @@ def predict():
         })
 
     except Exception as e:
-        logger.error(f"Prediction Error: {str(e)}")
+        logger.error("Prediction Error: %s", str(e))
         logger.error(traceback.format_exc())
         return jsonify({
             "error": "Unexpected error during prediction",
