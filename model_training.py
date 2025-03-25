@@ -6,9 +6,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay, f1_score
 from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 import pickle
 import os
+import joblib
 
 # File paths
 data_path = "Data/Processed_Loan_Data.csv"
@@ -22,12 +24,16 @@ df = pd.read_csv(data_path)
 X = df.drop("default", axis=1)
 y = df["default"]
 
-# Feature scaling
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+# Load pre-saved scaler
+scaler = joblib.load('Models/feature_scaler.joblib')
+X_scaled = scaler.transform(X)
 
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=random_seed)
+# Apply SMOTE for balancing
+smote = SMOTE(random_state=random_seed)
+X_resampled, y_resampled = smote.fit_resample(X_scaled, y)
 
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=random_seed)
 
 def log_model(model, X_test, y_test, y_pred, params, run_name, experiment_name, scaler=None):
     with mlflow.start_run(run_name=run_name, experiment_id=mlflow.set_experiment(experiment_name).experiment_id):
@@ -69,8 +75,7 @@ def log_model(model, X_test, y_test, y_pred, params, run_name, experiment_name, 
 
     return metrics
 
-
-# Logistic Regression
+# Logistic Regression with balanced class weights
 mlflow.set_experiment("Logistic_Regression")
 params_lr = {
     "class_weight": "balanced",
@@ -86,7 +91,7 @@ y_pred_lr = lr.predict(X_test)
 metrics_lr = log_model(lr, X_test, y_test, y_pred_lr, params_lr, "lr_balanced_saga", "Logistic_Regression", scaler)
 print("Logistic Regression Metrics:", metrics_lr)
 
-# Random Forest
+# Random Forest with balanced class weights
 mlflow.set_experiment("Random_Forest")
 params_rf = {
     "n_estimators": 100,
@@ -110,14 +115,3 @@ os.makedirs(os.path.dirname(model_path), exist_ok=True)
 with open(model_path, "wb") as f:
     pickle.dump({'model': best_model, 'scaler': scaler}, f)
 print(f"Best model saved to {model_path}")
-
-# Optional: Safer git commit with error handling
-try:
-    os.system('git add .')
-    commit_result = os.system('git commit -m "Model training and MLflow tracking completed"')
-    if commit_result == 0:
-        os.system('git push origin main')
-    else:
-        print("No changes to commit.")
-except Exception as e:
-    print(f"Git operations failed: {e}")

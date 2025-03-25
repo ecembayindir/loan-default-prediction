@@ -1,10 +1,19 @@
+# Version control
 .git*
+
+# Virtual environment
 /venv
+include/
+
+# Python cache files
 __pycache__/
-/*.pyc
+*.pyc
+
+# ML tracking and logs
 mlruns/
 mlflow.db
-include
 *.log
+
+# Visualization outputs
 Data/default_distribution.png
 Data/correlation_matrix.png

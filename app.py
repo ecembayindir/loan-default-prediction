@@ -21,13 +21,23 @@ except (ConnectionError, mlflow.exceptions.MlflowException) as e:
 # Load model and stats
 try:
     model_path = "Models/best_model.pkl"
-    stats_path = "Data/Loan_Data_Describe.csv"
-    model = pickle.load(open(model_path, "rb"))
-    stats = pd.read_csv(stats_path).loc[[1, 2]].reset_index(drop=True)
-except FileNotFoundError as e:
-    raise FileNotFoundError(f"Required files not found: {e}") from e
-except (pickle.PickleError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
-    raise RuntimeError(f"Error loading model or stats: {e}") from e
+
+    # Correctly load the model and scaler from the dictionary
+    with open(model_path, "rb") as f:
+        model_dict = pickle.load(f)
+
+    model = model_dict['model']  # Extract the actual model
+    scaler = model_dict['scaler']  # Extract the scaler
+
+    # Debug print to verify model and scaler
+    print("Model Type:", type(model))
+    print("Scaler Type:", type(scaler))
+    print("Model Attributes:", dir(model))
+    print("Scaler Attributes:", dir(scaler))
+
+except Exception as e:
+    print(f"Model Loading Error: {e}")
+    raise
 
 app = Flask(__name__)
 
@@ -35,58 +45,48 @@ app = Flask(__name__)
 def home():
     return render_template('index.html')
 
+
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
         # Start an MLflow run for each prediction (if available)
         with mlflow.start_run(run_name="prediction_run") if 'mlflow' in globals() else nullcontext():
             data = request.get_json()
-            credit_lines = float(data['credit_lines_outstanding'])
-            loan_amt = float(data['loan_amt_outstanding'])
-            total_debt = float(data['total_debt_outstanding'])
-            income = float(data['income'])
-            years_employed = float(data['years_employed'])
-            fico_score = float(data['fico_score'])
 
-            # Normalize features
-            features = [
-                credit_lines,
-                (loan_amt - stats.iloc[0, 1]) / stats.iloc[1, 1],
-                (total_debt - stats.iloc[0, 2]) / stats.iloc[1, 2],
-                (income - stats.iloc[0, 3]) / stats.iloc[1, 3],
-                (years_employed - stats.iloc[0, 4]) / stats.iloc[1, 4],
-                (fico_score - stats.iloc[0, 5]) / stats.iloc[1, 5],
+            feature_order = [
+                'credit_lines_outstanding',
+                'loan_amt_outstanding',
+                'total_debt_outstanding',
+                'income',
+                'years_employed',
+                'fico_score'
             ]
 
-            # Predict probability
-            prob = model.predict_proba([features])[0][1]
-            prediction = 1 if prob > 0.5 else 0
+            features = [float(data.get(feature, 0)) for feature in feature_order]
 
-            # Log inputs and outputs to MLflow (if available)
-            if 'mlflow' in globals():
-                mlflow.log_param("credit_lines_outstanding", credit_lines)
-                mlflow.log_param("loan_amt_outstanding", loan_amt)
-                mlflow.log_param("total_debt_outstanding", total_debt)
-                mlflow.log_param("income", income)
-                mlflow.log_param("years_employed", years_employed)
-                mlflow.log_param("fico_score", fico_score)
-                mlflow.log_metric("prediction_probability", prob)
-                mlflow.log_metric("prediction_label", prediction)
+            features_scaled = scaler.transform([features])
 
-            # Return response
+            # Get detailed probability information
+            prob = model.predict_proba(features_scaled)[0][1]
+
+            # Lower threshold for prediction (adjust as needed)
+            prediction = 1 if prob > 0.3 else 0
+
             return jsonify({
-                "prediction": prediction,
-                "probability": prob,
-                "message": "High risk of default!" if prob > 0.5 else "Low risk. Loan can be granted."
+                "prediction": int(prediction),
+                "probability": float(prob),
+                "message": "High risk of default!" if prediction == 1 else "Low risk. Loan can be granted."
             })
-    except (ValueError, KeyError) as e:
-        return jsonify({"error": f"Invalid input data: {e}"}), 400
-    except (AttributeError, IndexError) as e:
-        # More specific exceptions for data processing errors
-        return jsonify({"error": f"Data processing error: {e}"}), 500
-    except RuntimeError as e:
-        # More specific than general Exception
-        return jsonify({"error": f"Prediction error: {e}"}), 500
+
+    except Exception as e:
+        print(f"Prediction Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
