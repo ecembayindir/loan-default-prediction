@@ -48,8 +48,8 @@ jobs:
 
       - name: Download Task Definition
         run: |
-          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} \
-          --query "taskDefinition | {containerDefinitions: containerDefinitions, family: family, executionRoleArn: executionRoleArn, taskRoleArn: taskRoleArn, networkMode: networkMode, requiresCompatibilities: requiresCompatibilities, cpu: cpu, memory: memory}" \
+          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} \\
+          --query "taskDefinition | {containerDefinitions: containerDefinitions, family: family, executionRoleArn: executionRoleArn, taskRoleArn: taskRoleArn, networkMode: networkMode, requiresCompatibilities: requiresCompatibilities, cpu: cpu, memory: memory}" \\
           > task-definition.json
 
       - name: Fill in the New Image ID in the Amazon ECS Task Definition
