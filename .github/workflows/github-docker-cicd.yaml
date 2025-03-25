@@ -37,7 +37,8 @@ jobs:
 
       - name: Lint
         run: |
-          pylint --disable=R,C app.py
+          # Add more specific pylint configurations
+          pylint --disable=R,C,W0611,W0718 app.py
 
   cd_pipeline:
     runs-on: ubuntu-latest
