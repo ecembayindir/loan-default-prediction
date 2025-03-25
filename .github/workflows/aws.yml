@@ -1,3 +1,4 @@
+
 name: Deploy to Amazon ECS
 
 on:
@@ -5,11 +6,12 @@ on:
     branches: ["main"]
 
 env:
-  AWS_REGION: eu-west-3
-  ECR_REPOSITORY: loan-default-prediction
-  ECS_SERVICE: loanDefaultService
-  ECS_CLUSTER: loanDefaultCluster
-  CONTAINER_NAME: loanDefaultContainer
+  AWS_REGION: eu-west-3                  # Adjust to your preferred AWS region
+  ECR_REPOSITORY: loan-default-prediction # Your Amazon ECR repository name
+  ECS_SERVICE: loanDefaultService         # Your Amazon ECS service name
+  ECS_CLUSTER: loanDefaultCluster         # Your Amazon ECS cluster name
+  ECS_TASK_DEFINITION: loanDefaultTask    # Your Amazon ECS task definition name
+  CONTAINER_NAME: loanDefaultContainer    # The name of the container in your task definition
 
 permissions:
   contents: read
@@ -44,27 +46,12 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Create Task Definition
+      - name: Download Task Definition
         run: |
-          echo '{
-            "family": "loanDefaultTask",
-            "containerDefinitions": [
-              {
-                "name": "loanDefaultContainer",
-                "image": "${{ steps.build-image.outputs.image }}",
-                "essential": true,
-                "portMappings": [
-                  {
-                    "containerPort": 80,
-                    "hostPort": 80
-                  }
-                ]
-              }
-            ]
-          }' > task-definition.json
-
-      - name: Update ECS Task Definition
+          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+          --query "taskDefinition | {containerDefinitions: containerDefinitions, family: family, executionRoleArn: executionRoleArn, taskRoleArn: taskRoleArn, networkMode: networkMode, requiresCompatibilities: requiresCompatibilities, cpu: cpu, memory: memory}" \
+          > task-definition.json
+      - name: Fill in the New Image ID in the Amazon ECS Task Definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
