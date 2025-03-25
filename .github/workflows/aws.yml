@@ -45,12 +45,24 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Download Current Task Definition
+      - name: Create Task Definition
         run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_SERVICE }} \
-            --query taskDefinition \
-            > task-definition.json
+          echo '{
+            "family": "loanDefaultTask",
+            "containerDefinitions": [
+              {
+                "name": "loanDefaultContainer",
+                "image": "${{ steps.build-image.outputs.image }}",
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 80,
+                    "hostPort": 80
+                  }
+                ]
+              }
+            ]
+          }' > task-definition.json
 
       - name: Update ECS Task Definition
         id: task-def
