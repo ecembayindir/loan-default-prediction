@@ -1,45 +1,59 @@
-# app.py
+import os
 from flask import Flask, request, jsonify, render_template
-import pandas as pd
 import pickle
 import mlflow
-import os
-from contextlib import nullcontext
-
-# Set MLflow tracking URI (disable in production if no server is available)
-try:
-    mlflow.set_tracking_uri("http://localhost:8080")  # Update to remote URI in production
-except (ConnectionError, mlflow.exceptions.MlflowException) as e:
-    print(f"MLflow tracking URI not available: {e}. Running without MLflow logging.")
-
-# Start an MLflow experiment for production monitoring (optional)
-try:
-    mlflow.set_experiment("Production_Monitoring")
-except (ConnectionError, mlflow.exceptions.MlflowException) as e:
-    pass
-
-# Load model and stats
-try:
-    model_path = "Models/best_model.pkl"
-
-    # Correctly load the model and scaler from the dictionary
-    with open(model_path, "rb") as f:
-        model_dict = pickle.load(f)
-
-    model = model_dict['model']  # Extract the actual model
-    scaler = model_dict['scaler']  # Extract the scaler
-
-    # Debug print to verify model and scaler
-    print("Model Type:", type(model))
-    print("Scaler Type:", type(scaler))
-    print("Model Attributes:", dir(model))
-    print("Scaler Attributes:", dir(scaler))
-
-except Exception as e:
-    print(f"Model Loading Error: {e}")
-    raise
+import traceback
+import logging
 
 app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+# Robust model path resolution
+def find_model_file():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    possible_paths = [
+        os.path.join(base_dir, 'Models', 'best_model.pkl'),
+        os.path.join(base_dir, 'models', 'best_model.pkl'),
+        os.path.join(base_dir, 'best_model.pkl'),
+        '/app/Models/best_model.pkl',
+        '/app/models/best_model.pkl',
+        '/app/best_model.pkl'
+    ]
+
+    for path in possible_paths:
+        logger.info(f"Checking model path: {path}")
+        if os.path.exists(path):
+            logger.info(f"Model found at: {path}")
+            return path
+
+    logger.error("No model file found in any expected location")
+    return None
+
+
+# Load model and stats
+model = None
+scaler = None
+try:
+    model_path = find_model_file()
+
+    if model_path:
+        with open(model_path, "rb") as f:
+            model_dict = pickle.load(f)
+
+        model = model_dict['model']
+        scaler = model_dict['scaler']
+    else:
+        logger.error("Could not locate model file")
+
+except Exception as e:
+    logger.error(f"Model Loading Error: {e}")
+    logger.error(traceback.format_exc())
+
 
 @app.route('/')
 def home():
@@ -48,57 +62,71 @@ def home():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    if not model or not scaler:
+        logger.error("Model not loaded correctly")
+        return jsonify({
+            "error": "Model not loaded correctly. Check server logs.",
+            "model_status": "Not Loaded",
+            "working_directory": os.getcwd(),
+            "files_in_directory": os.listdir('.')
+        }), 500
+
     try:
-        # Start an MLflow run for each prediction (if available)
-        with mlflow.start_run(run_name="prediction_run") if 'mlflow' in globals() else nullcontext():
-            data = request.get_json()
+        # Existing prediction logic remains the same
+        data = request.get_json()
 
-            feature_order = [
-                'credit_lines_outstanding',
-                'loan_amt_outstanding',
-                'total_debt_outstanding',
-                'income',
-                'years_employed',
-                'fico_score'
-            ]
-
-            features = [float(data.get(feature, 0)) for feature in feature_order]
-
-            features_scaled = scaler.transform([features])
-
-            # Get detailed probability information
-            prob = model.predict_proba(features_scaled)[0][1]
-
-            # Lower threshold for prediction (adjust as needed)
-            prediction = 1 if prob > 0.3 else 0
-
+        if not data:
+            logger.error("No input data received")
             return jsonify({
-                "prediction": int(prediction),
-                "probability": float(prob),
-                "message": "High risk of default!" if prediction == 1 else "Low risk. Loan can be granted."
-            })
+                "error": "No input data received"
+            }), 400
 
-    except Exception as e:
-        print(f"Prediction Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        feature_order = [
+            'credit_lines_outstanding',
+            'loan_amt_outstanding',
+            'total_debt_outstanding',
+            'income',
+            'years_employed',
+            'fico_score'
+        ]
+
+        # Validate input data
+        for feature in feature_order:
+            if feature not in data:
+                logger.error(f"Missing feature: {feature}")
+                return jsonify({
+                    "error": f"Missing required feature: {feature}"
+                }), 400
+
+        # Convert features to float and handle potential conversion errors
+        try:
+            features = [float(data.get(feature, 0)) for feature in feature_order]
+        except ValueError as ve:
+            logger.error(f"Feature conversion error: {ve}")
+            return jsonify({
+                "error": "Invalid feature values. All features must be numeric."
+            }), 400
+
+        # Perform prediction
+        features_scaled = scaler.transform([features])
+        prob = model.predict_proba(features_scaled)[0][1]
+        prediction = 1 if prob > 0.3 else 0
 
         return jsonify({
-            "error": str(e),
-            "traceback": traceback.format_exc()
+            "prediction": int(prediction),
+            "probability": float(prob),
+            "message": "High risk of default!" if prediction == 1 else "Low risk. Loan can be granted."
+        })
+
+    except Exception as e:
+        logger.error(f"Prediction Error: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": "Unexpected error during prediction",
+            "details": str(e)
         }), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
-    import socket
-    while True:
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("0.0.0.0", port))
-            sock.close()
-            break
-        except OSError:
-            print(f"Port {port} is in use, trying {port + 1}")
-            port += 1
     app.run(host="0.0.0.0", port=port, debug=True)
-    print(f"Running on port {port}")

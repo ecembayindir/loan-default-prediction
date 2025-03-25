@@ -37,7 +37,6 @@ jobs:
 
       - name: Lint
         run: |
-          # Add more specific pylint configurations
           pylint --disable=R,C,W0611,W0718 app.py
 
   cd_pipeline:
